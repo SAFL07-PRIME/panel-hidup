@@ -99,7 +99,7 @@
    ISI 2 BARIS INI dengan data project bot-Ourin:
    Dashboard -> Project Settings -> API
 ============================================================ */
-const SUPABASE_URL  = "ISI_PROJECT_URL";
+const SUPABASE_URL  = "https://gevlrlaxvefrohchcwqa.supabase.co";
 const SUPABASE_ANON = "ISI_ANON_KEY";
 
 const card=document.getElementById('card'),pulse=document.getElementById('pulse'),
@@ -150,7 +150,7 @@ function renderStats(stats){
 }
 
 async function load(){
-  if(SUPABASE_URL.startsWith('ISI')){showErr('Config belum diisi — isi SUPABASE_URL & SUPABASE_ANON di bagian atas file ini.');return}
+  if(SUPABASE_URL.startsWith('ISI')||SUPABASE_ANON.startsWith('ISI')){showErr('Config panel belum lengkap — publishable key (sb_publishable_...) belum dipasang. Kirim ke Super Z ya.');return}
   try{
     const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
     const [{data:st,err:e1},{data:hs,err:e2},{data:stats,err:e3}]=await Promise.all([
