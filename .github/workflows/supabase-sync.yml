@@ -25,7 +25,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WATCH_REPO: SAFL07-PRIME/ourin-session
         run: |
           set -euo pipefail
@@ -36,9 +35,12 @@ jobs:
           fi
 
           # --- 1) Umur commit backup terakhir di repo yang ditonton ---
-          LAST_ISO=$(curl -sf -H "Authorization: Bearer $GH_TOKEN" \
-            "https://api.github.com/repos/${WATCH_REPO}/commits?per_page=1" \
-            | python3 -c "import json,sys;print(json.load(sys.stdin)[0]['commit']['author']['date'])")
+          # (clone tipis: GITHUB_TOKEN tidak bisa baca repo lain, dan API publik
+          #  bisa kena rate limit di runner — git clone bebas keduanya)
+          TMP_GIT=$(mktemp -d)
+          git clone --quiet --depth 1 "https://github.com/${WATCH_REPO}.git" "$TMP_GIT"
+          LAST_ISO=$(git -C "$TMP_GIT" log -1 --format=%cI)
+          rm -rf "$TMP_GIT"
           LAST_EP=$(date -d "$LAST_ISO" +%s)
           AGE=$(( ( $(date +%s) - LAST_EP ) / 60 ))
           if [ "$AGE" -lt 60 ]; then STATUS="hidup"; else STATUS="mati"; fi
