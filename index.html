@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Hidup Ourin 🟢</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟢</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#0a0f14; --card:#111820; --card2:#0d141c; --line:#1e2a36;
+    --txt:#e7eef4; --mut:#8ba1b3; --ok:#22c55e; --bad:#ef4444; --acc:#38bdf8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:radial-gradient(1200px 600px at 70% -10%, #0e1c28 0%, var(--bg) 55%);
+    color:var(--txt); font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,sans-serif;
+    min-height:100vh; padding:20px; display:flex; justify-content:center;
+  }
+  .wrap{width:100%;max-width:680px;display:flex;flex-direction:column;gap:16px}
+  header{display:flex;align-items:center;gap:10px}
+  header .dot{width:10px;height:10px;border-radius:50%;background:var(--acc);box-shadow:0 0 12px var(--acc)}
+  header h1{font-size:1.05rem;font-weight:800;letter-spacing:.3px}
+  header small{color:var(--mut);margin-left:auto;font-size:.72rem}
+
+  .status-card{
+    background:linear-gradient(160deg,var(--card),var(--card2));
+    border:1px solid var(--line);border-radius:20px;padding:28px 24px;
+    display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;overflow:hidden;
+  }
+  .status-card::before{content:'';position:absolute;inset:0;background:var(--glow,transparent);opacity:.10;pointer-events:none}
+  .pulse{width:84px;height:84px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2.4rem;
+    background:var(--pc,#333);position:relative}
+  .pulse::after{content:'';position:absolute;inset:-10px;border-radius:50%;border:2px solid var(--pc,#555);opacity:.5;animation:pp 2s infinite}
+  @keyframes pp{0%{transform:scale(.9);opacity:.6}100%{transform:scale(1.25);opacity:0}}
+  .status-title{font-size:1.7rem;font-weight:900;letter-spacing:1px}
+  .status-sub{color:var(--mut);font-size:.9rem;text-align:center}
+  .badge{font-size:.72rem;padding:4px 12px;border-radius:999px;border:1px solid var(--line);color:var(--mut)}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;text-align:center}
+  .stat b{display:block;font-size:1.25rem;margin-top:2px}
+  .stat span{font-size:.7rem;color:var(--mut);text-transform:uppercase;letter-spacing:.8px}
+
+  section.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+  section.box h2{font-size:.8rem;color:var(--mut);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+  .hist{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto}
+  .hrow{display:flex;align-items:center;gap:10px;font-size:.85rem;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+  .hrow .t{margin-left:auto;color:var(--mut);font-size:.72rem;white-space:nowrap}
+  .pill{font-size:.68rem;font-weight:800;padding:3px 9px;border-radius:999px}
+  .pill.ok{background:#052e16;color:var(--ok)} .pill.bad{background:#2a0a0a;color:var(--bad)}
+  .kv{display:flex;justify-content:space-between;font-size:.86rem;padding:7px 0;border-bottom:1px dashed var(--line)}
+  .kv:last-child{border-bottom:0}
+  .kv span:first-child{color:var(--mut)}
+  .empty{color:var(--mut);font-size:.82rem;text-align:center;padding:8px}
+  footer{text-align:center;color:var(--mut);font-size:.7rem;padding:6px 0 14px}
+  .err{background:#2a0a0a;border:1px solid #7f1d1d;color:#fca5a5;padding:10px 14px;border-radius:12px;font-size:.8rem;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="dot"></div>
+    <h1>PANEL HIDUP OURIN</h1>
+    <small id="sync-info">menyambungkan…</small>
+  </header>
+
+  <div class="err" id="err"></div>
+
+  <div class="status-card" id="card">
+    <div class="pulse" id="pulse">❔</div>
+    <div class="status-title" id="title">MEMUAT…</div>
+    <div class="status-sub" id="subtitle">mengambil denyut nadi bot…</div>
+    <div class="badge" id="badge">supabase: bot-Ourin</div>
+  </div>
+
+  <div class="grid">
+    <div class="stat"><span>Umur Backup</span><b id="s-age">—</b></div>
+    <div class="stat"><span>Backup Terakhir</span><b id="s-last">—</b></div>
+    <div class="stat"><span>Cek Terakhir</span><b id="s-check">—</b></div>
+  </div>
+
+  <section class="box">
+    <h2>Data Bot</h2>
+    <div class="kv"><span>Sewa (sewa.json)</span><span id="d-sewa">—</span></div>
+    <div class="kv"><span>Prefix (prefix.json)</span><span id="d-prefix">—</span></div>
+    <div class="kv"><span>Sumber</span><span>GitHub ourin-session → Supabase</span></div>
+  </section>
+
+  <section class="box">
+    <h2>Riwayat Hidup/Mati</h2>
+    <div class="hist" id="hist"><div class="empty">memuat riwayat…</div></div>
+  </section>
+
+  <footer>🟢 Panel Hidup Ourin — realtime via Supabase · sinkron tiap 30 menit dari GitHub · dibuat oleh Super Z</footer>
+</div>
+<script>
+/* ============================================================
+   ISI 2 BARIS INI dengan data project bot-Ourin:
+   Dashboard -> Project Settings -> API
+============================================================ */
+const SUPABASE_URL  = "ISI_PROJECT_URL";
+const SUPABASE_ANON = "ISI_ANON_KEY";
+
+const card=document.getElementById('card'),pulse=document.getElementById('pulse'),
+title=document.getElementById('title'),sub=document.getElementById('subtitle'),
+badge=document.getElementById('badge'),hist=document.getElementById('hist'),
+errBox=document.getElementById('err'),syncInfo=document.getElementById('sync-info');
+
+function showErr(m){errBox.textContent='⚠️ '+m;errBox.style.display='block'}
+function ago(iso){
+  if(!iso)return'—';
+  const m=Math.floor((Date.now()-new Date(iso).getTime())/60000);
+  if(m<1)return'baru saja';if(m<60)return m+' menit lalu';
+  const h=Math.floor(m/60);if(h<24)return h+' jam '+ (m%60?''+(m%60)+' mnt':'')+' lalu';
+  return Math.floor(h/24)+' hari lalu';
+}
+function fmt(iso){return iso?new Date(iso).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—'}
+
+function render(st){
+  const hidup=st.status==='hidup';
+  const c=hidup?'var(--ok)':'var(--bad)';
+  card.style.setProperty('--glow',hidup?'#22c55e':'#ef4444');
+  pulse.style.setProperty('--pc',c);pulse.textContent=hidup?'🟢':'🔴';
+  title.textContent=hidup?'BOT HIDUP':'BOT MATI';title.style.color=c;
+  sub.textContent=hidup
+    ? `Denyut backup normal — terakhir terlihat ${ago(st.last_backup)}`
+    : `Backup berhenti ${ago(st.last_backup)} — kemungkinan container reset`;
+  badge.textContent=`bot-Ourin · dicek ${ago(st.checked_at)}`;
+  document.getElementById('s-age').textContent=(st.detail?.age_min??'—')+' mnt';
+  document.getElementById('s-last').textContent=fmt(st.last_backup);
+  document.getElementById('s-check').textContent=fmt(st.checked_at);
+  syncInfo.textContent='realtime aktif ✦ '+new Date().toLocaleTimeString('id-ID');
+}
+function renderHist(rows){
+  if(!rows.length){hist.innerHTML='<div class="empty">belum ada riwayat — status belum pernah berubah</div>';return}
+  hist.innerHTML=rows.map(r=>`
+    <div class="hrow">
+      <span class="pill ${r.status==='hidup'?'ok':'bad'}">${r.status==='hidup'?'HIDUP':'MATI'}</span>
+      <span>${r.status==='hidup'?'Bot terdeteksi hidup kembali':'Bot terdeteksi mati'}</span>
+      <span class="t" title="${r.last_backup||''}">backup: ${ago(r.last_backup)}</span>
+    </div>`).join('');
+}
+function renderStats(stats){
+  const sewa=stats.find(s=>s.key==='sewa'),pf=stats.find(s=>s.key==='prefix');
+  document.getElementById('d-sewa').textContent=sewa
+    ? (sewa.value?.enabled?`aktif · ${Object.keys(sewa.value?.groups||{}).length} grup`:'nonaktif'):'—';
+  document.getElementById('d-prefix').textContent=pf
+    ? (pf.value?.noprefix?'tanpa prefix':((pf.value?.prefixes||[]).join(' ')||'kosong')):'—';
+}
+
+async function load(){
+  if(SUPABASE_URL.startsWith('ISI')){showErr('Config belum diisi — isi SUPABASE_URL & SUPABASE_ANON di bagian atas file ini.');return}
+  try{
+    const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
+    const [{data:st,err:e1},{data:hs,err:e2},{data:stats,err:e3}]=await Promise.all([
+      sb.from('bot_status').select('*').eq('id',1).maybeSingle(),
+      sb.from('bot_history').select('*').order('id',{ascending:false}).limit(30),
+      sb.from('bot_stats').select('*')
+    ]);
+    if(e1)throw e1;
+    if(st)render(st);else sub.textContent='belum ada data — tunggu workflow sync jalan (maks 30 menit)';
+    if(!e2)renderHist(hs||[]);
+    if(!e3)renderStats(stats||[]);
+
+    // REALTIME — update tanpa reload
+    sb.channel('panel-hidup')
+      .on('postgres_changes',{event:'*',schema:'public',table:'bot_status'},()=>{
+        sb.from('bot_status').select('*').eq('id',1).maybeSingle().then(({data})=>data&&render(data));
+      })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'bot_history'},(p)=>{
+        sb.from('bot_history').select('*').order('id',{ascending:false}).limit(30)
+          .then(({data})=>renderHist(data||[]));
+      })
+      .subscribe();
+
+    // fallback polling 60 detik
+    setInterval(async()=>{
+      const {data}=await sb.from('bot_status').select('*').eq('id',1).maybeSingle();
+      if(data)render(data);
+    },60000);
+  }catch(e){showErr('Gagal konek ke Supabase: '+(e.message||e))}
+}
+load();
+</script>
+</body>
+</html>
