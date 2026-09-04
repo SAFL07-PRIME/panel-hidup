@@ -1,0 +1,83 @@
+name: Supabase Sync (Panel Hidup)
+
+# Panel Hidup Ourin — repo khusus monitoring (TERPISAH dari repo backup bot).
+# Menonton: SAFL07-PRIME/ourin-session (umur commit backup terakhir).
+# Jalan tiap 30 menit (offset 5 menit dari bot-monitor.yml supaya tidak barengan).
+#
+# SECRET (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_URL         -> https://xxxx.supabase.co
+#   SUPABASE_SERVICE_KEY -> service/secret key (RAHASIA)
+# Kalau secret belum diisi ATAU tabel belum ada -> BERHENTI AMAN (tidak error).
+
+on:
+  schedule:
+    - cron: '5,35 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hitung status hidup/mati + kirim ke Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WATCH_REPO: SAFL07-PRIME/ourin-session
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_KEY:-}" ]; then
+            echo "::warning::Secret SUPABASE_URL / SUPABASE_SERVICE_KEY belum diisi — sync dilewati (aman)."
+            exit 0
+          fi
+
+          # --- 1) Umur commit backup terakhir di repo yang ditonton ---
+          LAST_ISO=$(curl -sf -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/${WATCH_REPO}/commits?per_page=1" \
+            | python3 -c "import json,sys;print(json.load(sys.stdin)[0]['commit']['author']['date'])")
+          LAST_EP=$(date -d "$LAST_ISO" +%s)
+          AGE=$(( ( $(date +%s) - LAST_EP ) / 60 ))
+          if [ "$AGE" -lt 60 ]; then STATUS="hidup"; else STATUS="mati"; fi
+          echo "Backup terakhir: $LAST_ISO (umur ${AGE}m) -> status: $STATUS"
+
+          NOW_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          AUTH=(-H "apikey: $SUPABASE_SERVICE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" -H "Content-Type: application/json")
+
+          # --- 0) Schema sudah jalan? Kalau tabel belum ada -> berhenti aman ---
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${AUTH[@]}" "$SUPABASE_URL/rest/v1/bot_status?select=id&limit=1")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::warning::Tabel bot_status belum ada (jalankan 01-schema.sql di SQL Editor dulu) - sync dilewati (aman)."
+            exit 0
+          fi
+
+          # --- 2) Riwayat: catat HANYA jika status berubah ---
+          CUR=$(curl -sf "${AUTH[@]}" "$SUPABASE_URL/rest/v1/bot_status?id=eq.1&select=status" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d[0]['status'] if d else '')" || echo "")
+          if [ "$CUR" != "$STATUS" ]; then
+            curl -sf -X POST "${AUTH[@]}" "$SUPABASE_URL/rest/v1/bot_history" \
+              -d "{\"status\":\"$STATUS\",\"last_backup\":\"$LAST_ISO\",\"checked_at\":\"$NOW_ISO\"}" > /dev/null
+            echo "Status berubah: ${CUR:-'(kosong)'} -> $STATUS (riwayat dicatat)"
+          fi
+
+          # --- 3) Upsert status terkini ---
+          curl -sf -X POST "${AUTH[@]}" "$SUPABASE_URL/rest/v1/bot_status?on_conflict=id" \
+            -H "Prefer: resolution=merge-duplicates" \
+            -d "{\"id\":1,\"status\":\"$STATUS\",\"last_backup\":\"$LAST_ISO\",\"checked_at\":\"$NOW_ISO\",\"detail\":{\"age_min\":$AGE,\"repo\":\"ourin-session\"}}" > /dev/null
+          echo "bot_status di-update: $STATUS"
+
+          # --- 4) Snapshot data bot dari repo yang ditonton (file publik) ---
+          for F in sewa prefix; do
+            VAL=$(curl -sf "https://raw.githubusercontent.com/${WATCH_REPO}/main/database/${F}.json" || echo "")
+            if [ -n "$VAL" ]; then
+              echo "$VAL" | jq -c '.' > /tmp/${F}.json 2>/dev/null || continue
+              curl -sf -X POST "${AUTH[@]}" "$SUPABASE_URL/rest/v1/bot_stats?on_conflict=key" \
+                -H "Prefer: resolution=merge-duplicates" \
+                -d "{\"key\":\"${F}\",\"value\":$(cat /tmp/${F}.json),\"updated_at\":\"$NOW_ISO\"}" > /dev/null
+              echo "bot_stats[${F}] tersinkron"
+            fi
+          done
+
+          echo "✅ Sync selesai"
