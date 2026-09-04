@@ -25,6 +25,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          WATCH_GH_TOKEN: ${{ secrets.WATCH_GH_TOKEN }}
           WATCH_REPO: SAFL07-PRIME/ourin-session
         run: |
           set -euo pipefail
@@ -33,12 +34,16 @@ jobs:
             echo "::warning::Secret SUPABASE_URL / SUPABASE_SERVICE_KEY belum diisi — sync dilewati (aman)."
             exit 0
           fi
+          if [ -z "${WATCH_GH_TOKEN:-}" ]; then
+            echo "::warning::Secret WATCH_GH_TOKEN belum diisi (repo bot private, clone butuh token) — sync dilewati (aman)."
+            exit 0
+          fi
 
           # --- 1) Umur commit backup terakhir di repo yang ditonton ---
           # (clone tipis: GITHUB_TOKEN tidak bisa baca repo lain, dan API publik
           #  bisa kena rate limit di runner — git clone bebas keduanya)
           TMP_GIT=$(mktemp -d)
-          git clone --quiet --depth 1 "https://github.com/${WATCH_REPO}.git" "$TMP_GIT"
+          git clone --quiet --depth 1 "https://x-access-token:${WATCH_GH_TOKEN}@github.com/${WATCH_REPO}.git" "$TMP_GIT"
           LAST_ISO=$(git -C "$TMP_GIT" log -1 --format=%cI)
           rm -rf "$TMP_GIT"
           LAST_EP=$(date -d "$LAST_ISO" +%s)
@@ -72,7 +77,7 @@ jobs:
 
           # --- 4) Snapshot data bot dari repo yang ditonton (file publik) ---
           for F in sewa prefix; do
-            VAL=$(curl -sf "https://raw.githubusercontent.com/${WATCH_REPO}/main/database/${F}.json" || echo "")
+            VAL=$(curl -sf -H "Authorization: Bearer ${WATCH_GH_TOKEN}" "https://raw.githubusercontent.com/${WATCH_REPO}/main/database/${F}.json" || echo "")
             if [ -n "$VAL" ]; then
               echo "$VAL" | jq -c '.' > /tmp/${F}.json 2>/dev/null || continue
               curl -sf -X POST "${AUTH[@]}" "$SUPABASE_URL/rest/v1/bot_stats?on_conflict=key" \
